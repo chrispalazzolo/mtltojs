@@ -112,7 +112,6 @@ function parseText(text, cbFunc){
 			var obj = null;
 			var line = null;
 			var c_type = null; // current type
-			var p_type = '';   // previous type
 			var isHeader = true;
 			var last_line = num_lines - 1;
 
@@ -148,421 +147,116 @@ function parseText(text, cbFunc){
 					continue;
 				}
 
-				//line = line.replace(/  /g, ' ');
 				line = line.split(' ');
 
-				p_type = c_type;
 				c_type = line[0];
 				if(c_type) c_type = c_type.toLowerCase();
-				
-				if(c_type != p_type && (p_type == 'f' || p_type == 'l' || p_type == 'p' || p_type == 'end') && obj != null){
-					if(!data.objs){ data.objs = []; }
-
-					data.objs.push(obj);
-					obj = null;
-				}
 
 				switch(c_type){
 					case 'newmtl': // Material name
+						// newmtl are the start of a new material object
+						if(obj != null){
+							data.objs.push(obj);
+							obj = {};
+						}
+						else{
+							obj = {};
+						}
+
 						write("Parsing Materal name (newmtl): " + line[1]);
 						obj.use_material = line[1];
 						isHeader = false;
 						break;
-					case 'Ka': // Geometric vertices
-					case 'Kd': // Texture vertices
-					case 'Ks': // Vertex normals
-						var which_k = null;
-						if(c_type == 'Ka'){
-							if(p_type != 'Ka') write("Parsing Geometric vertices (v)...");
-							which_k = 'geometric';
-						}
-						else if(c_type == 'Kd'){
-							if(p_type != 'Kd') write("Parsing Texture vertices (vt)...");
-							which_k = 'texture';
-						}
-						else if(c_type == 'Ks'){
-							if(p_type != 'Ks') write("Parsing Vertex normals (vn)...");
-							which_k = "normals";
-						}
-
-						if(obj == null) obj = {};
-						if(!obj.vertices) obj.vertices = {};
-						if(!obj.vertices[which_v]) obj.vertices[which_v] = [];
+					case 'Ka': // Ambient reflectivity
+					case 'Kd': // Diffuse reflectivity
+					case 'Ks': // Specular reflectivity
+					case 'Tf': // Transmission filter
+						var which = "unknown"; // which reflectivity
+						if(c_type == "Ka") which = "ambient";
+						else if(c_type == "Kd") which = "diffuse";
+						else if(c_type == "Ks") which = "specular";
+						else if(c_type == "Tf") which = "transmission";
+						var s_type = line[1]; // statement type
 						
-						for(var v = 1; v < line.length; v++){
-							if(line[v] != null && line[v] != undefined && line[v] != ''){
-								obj.vertices[which_v].push(parseFloat(line[v]));
-							}
-						}
-						break;
-					case 'p': //points
-						if(p_type != 'p') write("Paring Points (p)...");
-						if(!obj.point){obj.point = [];}
-						for(var p = 1; p < line.length; p++){
-							if(line[p] == '\\'){
-								i++;
-								line = lines[i].split(' ');
-								p = 0;
-							}
-							obj.point.push(parseInt(line[p]));
-						}
-						break;
-					case 'l': //lines
-						if(p_type != 'l') write("Parsing line vertex (l)...");
-						if(obj == null){obj = {};}
-						if(!obj.line) obj.line = {vertex: [], texture: null}
-						var vals = null;
-						var hasTxt = (line[1].indexOf('/') > -1);
-						if(hasTxt && obj.line.texture == null) obj.line.texture = [];
-						for(var l = 1; l < line.length; l++){
-							if(hasTxt){
-								vals = line[l].split('/');
-								obj.line.vertex.push(parseFloat(vals[0]));
-								obj.line.texture.push(parseFloat(vals[1]));
-							}
-							else{
-								obj.line.vertex.push(parseFloat(line[l]));
-							}
-						}
-						break;
-					case 'f': //faces
-						if(p_type != 'f') write("Parsing Faces (f)...");
-						if(obj == null) obj = {};
-						if(!obj.faces) obj.faces = {};
+						write("Parsing " + which + " " + (c_type == "Tf" ? "Transmission filter" : "reflectivity") + " (" + c_type + ")...");
 						
-						for(var fData = 1; fData < line.length; fData++){
-							var faces = line[fData].indexOf('/') > -1 ? line[fData].split('/') : [line[fData]];
-							
-							for(var f = 0; f < faces.length; f++){
-								var faceData = faces[f];
-
-								if(faceData != null && faceData != undefined && faceData != ''){
-									faceData = parseInt(faceData);
-
-									if(f == 0){
-										if(!obj.faces.vertex){obj.faces.vertex = [];}
-										obj.faces.vertex.push(faceData);
-									}
-									else if(f == 1){
-										if(!obj.faces.texture){obj.faces.texture = [];}
-										obj.faces.texture.push(faceData);
-									}
-									else if(f == 2){
-										if(!obj.faces.normal){obj.faces.normal = [];}
-										obj.faces.normal.push(faceData);
-									}
-								}
+						if(obj == null) obj = {};
+						
+						var refObj = {type: s_type}; // reflectivity or transmission filter object;
+						
+						if(s_type == "spectral"){
+							refObj.file = line[2];
+							if(line.length > 3){
+								refObj.factor = parseFloat(line[3]);
 							}
 						}
-						break;
-					case 'o': // Object name
-						write("Parsing Object (o): " + line[1]);
-						if(obj == null) obj = {};
-						obj.name = line[1];
-						break;
-					case 'g': // Group name
-						write("Parsing Group name (g)");
-						if(obj == null) obj = {};
-						obj.group = line.slice(1, line.length);
-						break;
-					case 'mg': // Merging group
-						write("Parsing Merging group (mg)");
-						if(obj == null) obj = {};
-						obj.mergin_group = [
-							parseInt(line[1]), // Group number
-							parseFloat(line[2]) // resolution
-						];
-						break;
-					case 's': // Smoothing Group
-						write("Parsing Smoothing Group (s)...");
-						obj.smoothing = line[1];
-						break;
-					case 'cstype': // Curve or Surface type
-						write("Parsing cstype...");
-						obj.cstype = {};
-						if(line.length > 2){
-							obj.cstype.rat = line[1];
-							obj.cstype.type = line[2];
-						} else{
-							obj.cstype.type = line[1];
-						}
-						break;
-					case 'deg': // Degree
-					case 'step': // Step
-						write("Parsing " + (c_type == "deg" ? "Degrees" : "Step") + " (" + c_type + ")...");
-						obj[c_type] = [parseInt(line[1])];
-						if(line.length > 2){
-							obj[c_type].push(parseInt(line[2]));
-						}
-						break;
-					case 'curv': // Curve
-						write("Parsing Curve (curv)...");
-						obj.curv = {u:null, v:[]};
-						obj.curv.u = [parseFloat(line[1]), parseFloat(line[2])]; //[start, end]
-						for(var c = 3; c < line.length; c++){
-							if(line[c] == '\\'){
-								i++;
-								line = lines[i].split(' ');
-								c = 0;
-							}
-
-							obj.curv.v.push(parseInt(line[c]));
-						}
-						break;
-					case 'curv2': // 2D Curve
-						write("Parsing Curve 2D (curv2)...");
-						obj.curv2 = [];
-						for(var c = 1; c < line.length; c++){
-							if(line[c] == '\\'){
-								i++;
-								line = lines[i].split(' ');
-								c = 0;
-							}
-
-							obj.curv2.push(parseInt(line[c]));
-						}
-						break;
-					case 'parm': // Global Parameters
-						write("Parsing Global Parameters (parm)...");
-						if(!obj.parm){obj.parm = {};}
-						var ptype = line[1]; // u or v
-						obj.parm[ptype] = [];
-						for(var p = 2; p < line.length; p++){
-							if(line[p] == '\\'){
-								i++;
-								line = lines[i].split(' ');
-								p = 0;
-							}
-							obj.parm[ptype].push(parseFloat(line[p]));
-						}
-						break;
-					case 'surf': // Surface
-						write("Parsing Surface (surf)...");
-						obj.surf = {u:null, v: null, vertices: null};
-						obj.surf.u = [parseFloat(line[1]), parseFloat(line[2])];
-						obj.surf.v = [parseFloat(line[3], parseFloat(line[4]))];
-						var ver = [];
-						var txt = null; // texture vertex
-						var nrm = null; // normals
-						var verts;
-						for(var v = 5; v < line.length; v++){
-							if(line[v] == '\\'){
-								i++;
-								line = lines[i].split(' ');
-								v = 0;
-							}
-							verts = line[v];
-							verts = verts.split('/');
-							ver.push(parseInt(verts[0]));
-							if(verts.length > 1){
-								if(txt == null) txt = [];
-								txt.push(parseInt(verts[1]));
-							}
-							if(verts.length > 2){
-								if(nrm == null) nrm = [];
-								nrm.push(parseFloat(verts[2]));
-							}
-						}
-						obj.surf.vertices = {vertex: ver, texture: txt, normals: nrm};
-
-						break;
-					case 'trim': // Trimming loop
-					case 'hole': // Trimming loop (hole)
-					case 'scrv': // Special Curve
-						if(c_type == "scrv") write("Parsing Special Curve");
-						else write("Parsing Trimming Loop" + c_type == "hole" ? " (hole)" : "" + "...");
-						if(!obj[c_type]) obj[c_type] = [];
-						obj[c_type].push([parseFloat(line[1]), parseFloat(line[2]), parseInt(line[3])]);
-						break;
-					case 'sp': // Special Point
-						write("Parsing Special Point (sp)...");
-						obj['sp'] = [parseInt(line[1]), parseInt(line[2])];
-						break;
-					case 'bmat': // basis matrix
-						var uv = line[1];
-						write("Parsing basis matrix " + uv + " (" + c_type + ")...");
-						if(!obj.deg || obj.deg.length < 2){
-							write("Error: No DEG value found, can't parse basis martix...");
-							break;
-						}
-						if(!obj[c_type]) obj[c_type] = {};
-						if(!obj[c_type][uv]) obj[c_type][uv] = [];
-						var matCt = obj.deg[uv == 'u' ? 0 : 1] + 1;
-						for(var b = 2; b < line.length; b++){
-							if(line[b] == "\\"){break;}
-							if(line[b] != ''){
-								obj[c_type][uv].push(uv == 'u' ? parseInt(line[b]) : parseFloat(line[b]));
-							}	
-						}
-						matCt--;
-						matCt = matCt + i;
-						for(var bl = i + 1; bl <= matCt; bl++){
-							line = lines[bl];
-							if(line != undefined && line != ''){
-								line = line.split(' ');
-								var val = null;
-								for(var lIdx = 0; lIdx < line.length; lIdx++){
-									val = line[lIdx];
-									if(val != '' && val != '\\'){
-										obj[c_type][uv].push(uv == 'u' ? parseInt(val) : parseFloat(val));
-									}
-								}
-
-								i++;
-							}
-						}
-						break;
-					case 'con': // Connectivity
-						write("Parsing Connectivity (con)...");
-						if(obj == null) obj = {};
-						obj.con = [
-							parseInt(line[1]),   //Surface 1
-							parseFloat(line[2]), // Start of curve (surface 1)
-							parseFloat(line[3]), // End of curve (surface 1)
-							parseInt(line[4]),   // Index of curve (surface 1)
-							parseInt(line[5]),   // Surface 2
-							parseFloat(line[6]), // Start of curve (surface 2)
-							parseFloat(line[7]), // End of curve (surface 2)
-							parseInt(line[8])    // Index of curve (surfect 2)
-						];
-						break;
-					case 'bevel': // Bevel Interpolation
-						write("Parsing Bevel (bevel)...");
-						if(obj == null) obj = {};
-						obj.bevel = line[1]; // on or off
-						break;
-					case 'c_interp': // Color Interpolation
-						write('Parseing Color Interplation (c_interp)...');
-						if(obj == null) obj = {};
-						obj.color_interp = line[1]; // on or off
-						break;
-					case 'd_interp': // Dissolve Interpolation
-						write("Parsing Dissolve Interpolation (d_interp)...");
-						if(obj == null) obj = {};
-						obj.dissolve_interp = line[1]; // on or off
-						break;
-					case 'lod': // Level of Detail
-						write("Parsing Level of Detail (lod)...");
-						if(obj == null) obj = {};
-						obj.level_detail = parseInt(line[1]);
-						break;
-					case 'maplib': // Map Library
-						write("Parsing Map Library (maplib)...");
-						if(obj == null) obj = {};
-						obj.map_lib = line.slice(1, line.length);
-						break;
-					case 'usemap': // Texture map
-						write("Parsing Texture Map (usemap)...");
-						if(obj == nul) obj = {};
-						obj.usemap = line[1]; // map name or off
-						break;
-					case 'shadow_obj': //Shadow obj filename
-						write("Parsing Shadow obj filename (shadow_obj)...");
-						if(obj == null) obj = {};
-						obj.shadow_obj = line[1];
-						break;
-					case 'trace_obj': // Ray Tracing filename
-						write("Parsing Ray Tracing Filename (trace_obj)...");
-						obj.ray_trace_filename = line[1];
-						break;
-					case 'ctech': // Curve approx Technique
-						write("Parsing Curve Approx Technique (ctech)...");
-						if(obj == null) obj = {};
-						obj.curve_tech = {technique: line[1]};
-						if(line.length > 3){
-							obj.curve_tech.max_dist = parseFloat(line[2]);
-							obj.curve_tech.max_angle = parseFloat(line[3]);
+						else if(s_type == "xyz"){
+							refObj.vals = [
+								parseFloat(line[2]), // x
+								parseFloat(line[3]), // y
+								parseFloat(line[4])  // z
+							];
 						}
 						else{
-							if(line[1] == "cparm"){
-								obj.curve_tech.res = parseFloat(line[2]);
-							} else{
-								obj.curve_tech.max_len = parseInt(line[2]);
-							}
+							refObj.type = "rbg";
+							refObj.vals = [
+							  parseFloat[s_type],  // r = red
+							  parseFloat(line[2]), // b = blue
+							  parseFloat(line[3])  // g = green
+							];
+						}
+
+						obj[which_r] = refObj;
+						
+						break;
+					case 'illum': // Illumination model
+						write("Parsing Illumination model (illum)...");
+						if(obj == null) obj = {};
+						obj.illumination = parseInt(line[1]);
+						break;
+					case 'd': // Dissolve
+						write("Parsing Dissolve (d)...");
+						if(obj == null) obj = {};
+						obj.dissolve = {};
+						if(line[1] == "-halo"){
+							obj.dissolve.type = "halo";
+							obj.dissolve.factor = parseFloat(line[2]);
+						}
+						else{
+							obj.dissolve.type = "background";
+							obj.dissolve.factor = parseFloat(line[1]);
 						}
 						break;
-					case 'stech': // Surface Technique
-						write("Parseing Surface Technique (stech)...");
+					case 'Ns': // Specular Exponent
+						write("Parsing Specular exponent (Ns)...");
 						if(obj == null) obj = {};
-						obj.surface_tech = {technique: line[1]};
-						switch(line[1]){
-							case 'cparma':
-								obj.surface_tech.resolution =[
-									parseFloat(line[2]), // U
-									parseFloat(line[3])  // V
-								];
-								break;
-							case 'cparmb':
-								obj.surface_tech.resolution = parseFloat(line[2]); // uv
-								break;
-							case 'cspace':
-								obj.surface_tech.max_len = parseInt(line[2]); // max length
-								break;
-							case 'curv':
-								obj.surface_tech.max_dist = parseFloat(line[2]); // max distance
-								obj.surface_tech.max_angle = parseFloat(line[3]); // max angle
-								break;
-						}
+						obj.specular_exp = parseInt(line[1]);
 						break;
-					case 'bsp': // B-spline patch
-						write("Parsing B-Spline Patch (bsp)...");
+					case 'Ni': // Optical density
+						write("Parsing Optical density (Ni)...");
 						if(obj == null) obj = {};
-						obj.b_spline_patch = [];
-						for(var b = 1; b < line.length; b++){
-							if(line[b] == '\\'){
-								i++;
-								line = lines[i].split(' ');
-								b = 0;
-							}
-							obj.b_spline_patch.push(parseInt(line[b]));
-						}
+						obj.optical_density = parseFloat(line[1]);
 						break;
-					case 'bzp': // Bezier Patch
-						write("Parsing Bezier Patch (bzp)...");
+					case 'sharpness': // Reflection Sharpness
+						write("Parsing Sharpness (sharpness)...");
 						if(obj == null) obj = {};
-						obj.bezier_patch = [];
-						for(var b = 1; b < line.length; b++){
-							if(line[b] == '\\'){
-								i++;
-								line = lines[i].split(' ');
-								b = 0;
-							}
-							obj.bezier_patch.push(parseInt(line[b]));
-						}
+						obj.sharpness = parseInt(line[1]);
 						break;
-					case 'cdc': // Cardinal Curve Patch
-						write("Parsing Cardinal Curve Patch (cdc)...");
-						if(obj == null) obj = {};
-						obj.cardinal_curv_patch = [];
-						for(var c = 1; c < line.length; c++){
-							if(line[c] == '\\'){
-								i++;
-								line = lines[i].split(' ');
-								c = 0;
-							}
-							obj.cardinal_curv_patch.push(parseInt(line[c]));
-						}
-						break;
-					case 'cdp': // Cardinal Patch
-						write("Parsing Cardinal Patch (cdp)...");
-						if(obj == null) obj = {};
-						obj.cardinal_patch = [];
-						for(var c = 1; c < line.length; c++){
-							if(line[c] == '\\'){
-								i++;
-								line = lines[i].split(' ');
-								c = 0;
-							}
-							obj.cardinal_patch.push(parseInt(line[c]));
-						}
-						break;
-					case 'res': // Reference
-						write('Parsing Reference (res)...');
-						if(obj == null) obj = {};
-						obj.reference = {
-							useg: parseInt(line[1]),
-							vseg: parseInt(line[2])
-						}
+					case 'map_Ka': // Ambient Color texture file
+					case 'map_Kd': // Diffuse color texture file
+					case 'map_Ks': // Specular color texture file
+					case 'map_Ns': // Specular exponent texture file
+					case 'map_d':  // Dissolve texture file
+						var which = "unknown_map";
+						if(c_type == 'map_Ka') which = "ambient";
+						write("Parsing Map " + which + " (" + c_type + ")...");
+						if(!obj.map) obj.map = {};
+						var len = line.length;
+						// figure out options.......................
+						obj.map[which] = {
+							option: null,
+							flie: line[len - 1]
+						};
 						break;
 					default:
 						write("Unprocessed Line: (#" + i + ") " + lines[i]);
