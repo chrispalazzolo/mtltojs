@@ -249,6 +249,10 @@ function parseText(text, cbFunc){
 					case 'map_d':  // Dissolve texture file
 						var which = "unknown_map";
 						if(c_type == 'map_Ka') which = "ambient";
+						if(c_type == 'map_Kd') which = "diffuse";
+						if(c_type == 'map_Ks') which = "specular";
+						if(c_type == 'map_Ns') which = 'specular_exp';
+						if(c_type == 'map_d') which = 'dissolve';
 						write("Parsing Map " + which + " (" + c_type + ")...");
 						if(!obj.map) obj.map = {};
 						var len = line.length;
@@ -257,6 +261,12 @@ function parseText(text, cbFunc){
 							option: null,
 							flie: line[len - 1]
 						};
+						break;
+					case 'map_aat':
+						write("Parsing Anti-aliasing (map_aat)...");
+						if(obj == null) obj = {};
+						if(!obj.map) obj.map = {};
+						obj.map.anti_alias = line[1];
 						break;
 					default:
 						write("Unprocessed Line: (#" + i + ") " + lines[i]);
