@@ -242,31 +242,111 @@ function parseText(text, cbFunc){
 						if(obj == null) obj = {};
 						obj.sharpness = parseInt(line[1]);
 						break;
+					//Texture Maps...
 					case 'map_Ka': // Ambient Color texture file
 					case 'map_Kd': // Diffuse color texture file
 					case 'map_Ks': // Specular color texture file
 					case 'map_Ns': // Specular exponent texture file
 					case 'map_d':  // Dissolve texture file
+					case 'decal':  
+					case 'disp':
+					case 'bump':
 						var which = "unknown_map";
-						if(c_type == 'map_Ka') which = "ambient";
-						if(c_type == 'map_Kd') which = "diffuse";
-						if(c_type == 'map_Ks') which = "specular";
-						if(c_type == 'map_Ns') which = 'specular_exp';
-						if(c_type == 'map_d') which = 'dissolve';
-						write("Parsing Map " + which + " (" + c_type + ")...");
-						if(!obj.map) obj.map = {};
+						switch(c_type){
+							case 'map_Ka': which = "ambient"; break;
+							case 'map_Kd': which = "diffuse"; break;
+							case 'map_Ks': which = "specular"; break;
+							case 'map_Ns': which = 'specular_exp'; break;
+							case 'map_d': which = 'dissolve'; break;
+							default:
+								which = c_type;
+						}
+						write("Parsing Texutre Map " + which + " (" + c_type + ")...");
+						if(!obj.texture_map) obj.texture_map = {};
 						var len = line.length;
-						// figure out options.......................
-						obj.map[which] = {
-							option: null,
-							flie: line[len - 1]
-						};
+						obj.texture_map[which] = {options: [], flie: null};
+						for(var m = 1; m < line.length; m++){
+							if(line[m].indexOf('.') > -1){ // file name
+								obj.texture_map[which].file = line[m];
+							}
+							else{ // options
+								var o = {line[m]: null};
+								switch(line[m]){
+									case '-o':
+									case '-s':
+									case '-t':
+										o[line[m]] = [
+											parseFloat(line[m++]), // u
+											parseFloat(line[m++]), // v
+											parseFloat(line[m++])  // w
+										];
+										break;
+									case '-mm':
+										o[line[m]] = [
+											parseFloat(line[m++]), // base
+											parseFloat(line[m++])  // gain
+										];
+										break;
+									case '-bm':
+									case '-texres':
+									case '-boost':
+										o[line[m]] = parseFloat(line[m++]);
+										break;
+									default:
+										o[line[m]] = line[m++];
+								}
+
+								obj.texture_map[which].options.push(o);
+							}
+						}
 						break;
 					case 'map_aat':
 						write("Parsing Anti-aliasing (map_aat)...");
 						if(obj == null) obj = {};
 						if(!obj.map) obj.map = {};
 						obj.map.anti_alias = line[1];
+						break;
+					//Reflection Map...
+					case 'refl':
+						write("Parsing Reflection Map (refl)...");
+						obj.reflection_map = {file:null, type: null, options:[]};
+						for(var m = 1; m < line.length; m++){
+							if(line[m].indexOf('.') > -1){
+								obj.reflection_map.file = line[m];
+							}
+							else if(line[m] == "-type"){
+								obj.reflection_map.type = line[m++];
+							}
+							else{
+								var o = {line[m]: null};
+								switch(line[m]){
+									case '-o':
+									case '-s':
+									case '-t':
+										o[line[m]] = [
+											parseFloat(line[m++]), // u
+											parseFloat(line[m++]), // v
+											parseFloat(line[m++])  // w
+										];
+										break;
+									case '-mm':
+										o[line[m]] = [
+											parseFloat(line[m++]), // base
+											parseFloat(line[m++])  // gain
+										];
+										break;
+									case '-texres':
+									case '-bm':
+									case '-boost':
+										o[line[m]] = parseFloat(line[m++]);
+										break;
+									default:
+										o[line[m]] = line[m++];
+								}
+
+								obj.reflection_map.options.push(o);
+							}
+						}
 						break;
 					default:
 						write("Unprocessed Line: (#" + i + ") " + lines[i]);
