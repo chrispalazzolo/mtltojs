@@ -120,8 +120,8 @@ function parseText(text, cbFunc){
 
 				if(line == undefined || line == '' || line == null){
 					if(i == last_line && obj != null){
-						if(!data.objs){ data.objs = []; }
-						data.objs.push(obj);
+						if(!data.material){ data.material = []; }
+						data.material.push(obj);
 					}
 
 					continue;
@@ -156,7 +156,8 @@ function parseText(text, cbFunc){
 					case 'newmtl': // Material name
 						// newmtl are the start of a new material object
 						if(obj != null){
-							data.objs.push(obj);
+							if(!data.material){ data.material = []; }
+							data.material.push(obj);
 							obj = {};
 						}
 						else{
@@ -167,18 +168,18 @@ function parseText(text, cbFunc){
 						obj.use_material = line[1];
 						isHeader = false;
 						break;
-					case 'Ka': // Ambient reflectivity
-					case 'Kd': // Diffuse reflectivity
-					case 'Ks': // Specular reflectivity
-					case 'Tf': // Transmission filter
+					case 'ka': // Ambient reflectivity
+					case 'kd': // Diffuse reflectivity
+					case 'ks': // Specular reflectivity
+					case 'tf': // Transmission filter
 						var which = "unknown"; // which reflectivity
-						if(c_type == "Ka") which = "ambient";
-						else if(c_type == "Kd") which = "diffuse";
-						else if(c_type == "Ks") which = "specular";
-						else if(c_type == "Tf") which = "transmission";
+						if(c_type == "ka") which = "ambient";
+						else if(c_type == "kd") which = "diffuse";
+						else if(c_type == "ks") which = "specular";
+						else if(c_type == "tf") which = "transmission";
 						var s_type = line[1]; // statement type
 						
-						write("Parsing " + which + " " + (c_type == "Tf" ? "Transmission filter" : "reflectivity") + " (" + c_type + ")...");
+						write("Parsing " + which + " " + (c_type == "tf" ? "Transmission filter" : "reflectivity") + " (" + c_type + ")...");
 						
 						if(obj == null) obj = {};
 						
@@ -200,13 +201,13 @@ function parseText(text, cbFunc){
 						else{
 							refObj.type = "rbg";
 							refObj.vals = [
-							  parseFloat[s_type],  // r = red
+							  parseFloat(s_type),  // r = red
 							  parseFloat(line[2]), // b = blue
 							  parseFloat(line[3])  // g = green
 							];
 						}
 
-						obj[which_r] = refObj;
+						obj[which] = refObj;
 						
 						break;
 					case 'illum': // Illumination model
@@ -227,12 +228,12 @@ function parseText(text, cbFunc){
 							obj.dissolve.factor = parseFloat(line[1]);
 						}
 						break;
-					case 'Ns': // Specular Exponent
+					case 'ns': // Specular Exponent
 						write("Parsing Specular exponent (Ns)...");
 						if(obj == null) obj = {};
 						obj.specular_exp = parseInt(line[1]);
 						break;
-					case 'Ni': // Optical density
+					case 'ni': // Optical density
 						write("Parsing Optical density (Ni)...");
 						if(obj == null) obj = {};
 						obj.optical_density = parseFloat(line[1]);
@@ -243,62 +244,27 @@ function parseText(text, cbFunc){
 						obj.sharpness = parseInt(line[1]);
 						break;
 					//Texture Maps...
-					case 'map_Ka': // Ambient Color texture file
-					case 'map_Kd': // Diffuse color texture file
-					case 'map_Ks': // Specular color texture file
-					case 'map_Ns': // Specular exponent texture file
+					case 'map_ka': // Ambient Color texture file
+					case 'map_kd': // Diffuse color texture file
+					case 'map_ks': // Specular color texture file
+					case 'map_ns': // Specular exponent texture file
 					case 'map_d':  // Dissolve texture file
 					case 'decal':  
 					case 'disp':
 					case 'bump':
 						var which = "unknown_map";
 						switch(c_type){
-							case 'map_Ka': which = "ambient"; break;
-							case 'map_Kd': which = "diffuse"; break;
-							case 'map_Ks': which = "specular"; break;
-							case 'map_Ns': which = 'specular_exp'; break;
+							case 'map_ka': which = "ambient"; break;
+							case 'map_kd': which = "diffuse"; break;
+							case 'map_ks': which = "specular"; break;
+							case 'map_ns': which = 'specular_exp'; break;
 							case 'map_d': which = 'dissolve'; break;
 							default:
 								which = c_type;
 						}
 						write("Parsing Texutre Map " + which + " (" + c_type + ")...");
 						if(!obj.texture_map) obj.texture_map = {};
-						var len = line.length;
-						obj.texture_map[which] = {options: [], flie: null};
-						for(var m = 1; m < line.length; m++){
-							if(line[m].indexOf('.') > -1){ // file name
-								obj.texture_map[which].file = line[m];
-							}
-							else{ // options
-								var o = {line[m]: null};
-								switch(line[m]){
-									case '-o':
-									case '-s':
-									case '-t':
-										o[line[m]] = [
-											parseFloat(line[m++]), // u
-											parseFloat(line[m++]), // v
-											parseFloat(line[m++])  // w
-										];
-										break;
-									case '-mm':
-										o[line[m]] = [
-											parseFloat(line[m++]), // base
-											parseFloat(line[m++])  // gain
-										];
-										break;
-									case '-bm':
-									case '-texres':
-									case '-boost':
-										o[line[m]] = parseFloat(line[m++]);
-										break;
-									default:
-										o[line[m]] = line[m++];
-								}
-
-								obj.texture_map[which].options.push(o);
-							}
-						}
+						obj.texture_map[which] = parseMap(line);
 						break;
 					case 'map_aat':
 						write("Parsing Anti-aliasing (map_aat)...");
@@ -309,44 +275,7 @@ function parseText(text, cbFunc){
 					//Reflection Map...
 					case 'refl':
 						write("Parsing Reflection Map (refl)...");
-						obj.reflection_map = {file:null, type: null, options:[]};
-						for(var m = 1; m < line.length; m++){
-							if(line[m].indexOf('.') > -1){
-								obj.reflection_map.file = line[m];
-							}
-							else if(line[m] == "-type"){
-								obj.reflection_map.type = line[m++];
-							}
-							else{
-								var o = {line[m]: null};
-								switch(line[m]){
-									case '-o':
-									case '-s':
-									case '-t':
-										o[line[m]] = [
-											parseFloat(line[m++]), // u
-											parseFloat(line[m++]), // v
-											parseFloat(line[m++])  // w
-										];
-										break;
-									case '-mm':
-										o[line[m]] = [
-											parseFloat(line[m++]), // base
-											parseFloat(line[m++])  // gain
-										];
-										break;
-									case '-texres':
-									case '-bm':
-									case '-boost':
-										o[line[m]] = parseFloat(line[m++]);
-										break;
-									default:
-										o[line[m]] = line[m++];
-								}
-
-								obj.reflection_map.options.push(o);
-							}
-						}
+						obj.reflection_map = parseMap(line);
 						break;
 					default:
 						write("Unprocessed Line: (#" + i + ") " + lines[i]);
@@ -373,6 +302,50 @@ function parseText(text, cbFunc){
 	} else{
 		return {err: err, data: data};
 	}
+}
+
+function parseMap(line){
+	var obj = {file:null, options:[]};
+	for(var m = 1; m < line.length; m++){
+		if(line[m].indexOf('.') > -1){
+			obj.file = line[m];
+		}
+		else if(line[m] == "-type"){
+			obj.type = line[m++];
+		}
+		else{
+			var o = {};
+			o[line[m]] = null;
+			switch(line[m]){
+				case '-o':
+				case '-s':
+				case '-t':
+					o[line[m]] = [
+						parseFloat(line[m++]), // u
+						parseFloat(line[m++]), // v
+						parseFloat(line[m++])  // w
+					];
+					break;
+				case '-mm':
+					o[line[m]] = [
+						parseFloat(line[m++]), // base
+						parseFloat(line[m++])  // gain
+					];
+					break;
+				case '-texres':
+				case '-bm':
+				case '-boost':
+					o[line[m]] = parseFloat(line[m++]);
+					break;
+				default:
+					o[line[m]] = line[m++];
+			}
+
+			obj.options.push(o);
+		}
+	}
+
+	return obj;
 }
 
 function OpenFile(file, option, cbFunc){
@@ -705,8 +678,8 @@ function parseSync(file, options){
 	
 	writeLoggingHeader();
 
-	var data = parseFileSync(file);
-	var json = processJSON(data);
+	var parsedObj = parseFileSync(file);
+	var json = processJSON(parsedObj.data);
 
 	write("Memory usage before parse: " + util.inspect(s_mem, {depth:null}));
 	var u_mem = process.memoryUsage();
@@ -718,7 +691,7 @@ function parseSync(file, options){
 
 	saveLog();
 
-	var rData = {err: err, data: data};
+	var rData = {err: err, data: parsedObj};
 	if(json) rData.json = json;
 
 	return rData;
