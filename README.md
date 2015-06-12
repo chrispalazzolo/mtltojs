@@ -19,16 +19,19 @@ Returns a js object and optional JSON.
 
 var parser = require("mtltojs");
 
-// Async call<br />
-parser.parse(file, function(err, data){<br />
-  // do stuff with data<br />
+```javascript
+// Async call
+parser.parse(file, function(err, data){
+  // do stuff with data
 });
-
+```
 or
 
-//Synchronous call<br />
+```javascript
+//Synchronous call
 var data = parser.parseSync("C:/3d/materials/sample.mtl");
 ```
+
 Methods
 -------
 parse - Is an async method which takes in a filepath and optional options object.  Returns a js objected of the parsed data. Options to save JSON and log information to a file. For options See below
