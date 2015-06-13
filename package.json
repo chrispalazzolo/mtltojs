@@ -1,6 +1,6 @@
 {
   "name": "mtltojs",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "nodejs module to parse WaveFront Material (.mtl) files to javascript and/or JSON",
   "main": "index.js",
   "scripts": {

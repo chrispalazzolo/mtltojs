@@ -170,11 +170,13 @@ function parseText(text, cbFunc){
 					case 'ka': // Ambient reflectivity
 					case 'kd': // Diffuse reflectivity
 					case 'ks': // Specular reflectivity
+					case 'ke': // Emission 
 					case 'tf': // Transmission filter
 						var which = "unknown"; // which reflectivity
 						if(c_type == "ka") which = "ambient";
 						else if(c_type == "kd") which = "diffuse";
 						else if(c_type == "ks") which = "specular";
+						else if(c_type == "ke") which = "emission";
 						else if(c_type == "tf") which = "transmission";
 						var s_type = line[1]; // statement type
 						
