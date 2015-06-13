@@ -7,7 +7,7 @@ var file_ext = '';
 var save_path = '';
 var log = [];
 
-function parseFileAsync(file, cbFunc){
+function parseFile(file, cbFunc){
 	var errMsg = '';
 	
 	write("Opening File...");
@@ -130,13 +130,11 @@ function parseText(text, cbFunc){
 
 				if(line.charAt(0) == "#"){
 					if(isHeader){
-						if(!data.comments){
-							data.comments = [];
-						}
+						if(!data.header){data.header = [];}
 
-						data.comments.push(line);
+						data.header.push(line);
 					}
-					else{
+					else if(opts.parseComments == true){
 						if(obj == null){obj = {};}
 						if(!obj.comments){
 							obj.comments = [];
@@ -506,55 +504,88 @@ function getPath(ext){
 	}
 }
 
+function mkFolder(path, cbFunc){
+	var isAsync = isCallbackFunc(cbFunc);
+	write("Checking if path '" + path + "' exists...");
+	if(isAsync){
+		fs.exists(path, function(exists){
+			if(!exists){
+				write("Creating folder '" + path + "'...");
+				fs.mkdir(path, function(err){
+					if(err){
+						write("Error: Can not create folder " + path + " | " + err);
+						cbFunc(err)
+					}
+					else{
+						write("Folder created: " + path);
+						cbFunc(0);
+					}
+				});
+			}
+			else{
+				write("Folder '" + path + "' already exists, no need to create it...");
+				cbFunc(0);
+			}
+		});
+	}
+	else{
+		var exists = fs.existsSync(path);
+		if(!exists){
+			write("Creating folder '" + path + "'...");
+			var err = fs.mkdirSync(path);
+			if(err){
+				write("Error: Can not create folder " + path + " | " + err);
+				return err;
+			}
+			else{
+				write("Folder created: " + path);
+				return 0;
+			}
+		}
+		else{
+			write("Folder '" + path + "' already exists, no need to create it...");
+			return 0;
+		}
+		
+	}
+}
+
 function createFolder(cbFunc){
 	var isAsync = isCallbackFunc(cbFunc);
-	
+	save_path = file_path;
 	if(opts.saveJSON || opts.logging){
 		write("Creating folder to save log and/or JSON files...");
-		var path = file_path + file_name + '/materials/';
+		var path = file_path + file_name + '/';
 		if(isAsync){
-			fs.exists(path, function(exists){
-				if(!exists){
-					fs.mkdir(path, function(e){
-						if(e){
-							write("Error: Can not create folder " + path + " | " + e);
-							save_path = file_path + "materials/";
-							write("Files will be saved to " + save_path);
-							cbFunc(e);
+			mkFolder(path, function(err){
+				if(!err){
+					save_path = path;
+					path = path + "materials/";
+					mkFolder(path, function(err){
+						if(!err){
+							save_path = path;
 						}
-						
-						write("Folder created: " + path);
-						save_path = path;
-						cbFunc(0);
+						cbFunc(err);
 					});
 				}
 				else{
-					write("Folder already exists, no need to create it...");
-					save_path = path;
-					cbFunc(0);
+					cbFunc(err);
 				}
 			});
 		}
 		else{
-			if(!fs.existsSync(path)){
-				var e = fs.mkdirSync(path);
-
-				if(e){
-					write("Error: Can not create folder " + path + " | " + e);
-					save_path = file_path + "materials/";
-					write("Files will be saved to " + save_path);
-					return e;
-				}
-				else{
-					write("Folder created: " + path);
+			var err = mkFolder(path);
+			if(!err){
+				save_path = path;
+				path = path + "materials/";
+				err = mkFolder(path);
+				if(!err){
 					save_path = path;
-					return 0;
 				}
+				return err;
 			}
 			else{
-				write("Folder already exists, no need to create it...");
-				save_path = path;
-				return 0;
+				return err;
 			}
 		}
 	}
@@ -735,12 +766,12 @@ function parse(file, options, cbFunc){
 		}
 		else{
 			writeLoggingHeader();
-
-			createFolder(function(){
-				parseFileAsync(file, function(err, data){	
-					processJSON(data, function(err, json){
-						if(json != null){
-							data.json = json;
+			parseFile(file, function(err, parsedObj){
+				var rObj = {err: err, data: parsedObj};
+				createFolder(function(err){
+					processJSON(parsedObj, function(err, json){
+						if(!err && json != null){
+							rObj.JSON = json;
 						}
 
 						write("Memory usage before parse: " + util.inspect(s_mem, {depth:null}));
@@ -752,7 +783,7 @@ function parse(file, options, cbFunc){
 						write("Overall Run Time: " + ov_e_time[0] + "s, " + ov_e_time[1] + "ns");
 
 						saveLog(function(err){
-							cbFunc(err, data);
+							cbFunc(err, rObj);
 						});
 					});
 				});

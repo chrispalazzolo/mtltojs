@@ -79,3 +79,4 @@ MIT
 ## Release History
 
 * 0.1.0 Initial Release
+* 0.2.0 Better naming for header comments and folder creation.  Bug fixes
